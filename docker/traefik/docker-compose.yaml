@@ -1,0 +1,44 @@
+services:
+  proxy:
+    image: "traefik:v3.2"
+    container_name: reverse-proxy
+    restart: always
+    networks:
+      - web
+    command:
+      - --api=true
+
+      - --ping
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+
+      - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.email=${CF_API_EMAIL}
+      - --log.level=DEBUG
+
+    environment:
+      - CLOUDFLARE_DNS_API_TOKEN=${CF_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${HOST_PATH}letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${HOST_PATH}config.toml:/etc/traefik/traefik.config.toml:ro
+      - ${HOST_PATH}certs:/etc/certs:ro
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 30s
+      retries: 10
+
+networks:
+  web:
+    name: web

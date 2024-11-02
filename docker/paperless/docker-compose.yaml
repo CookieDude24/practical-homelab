@@ -1,0 +1,123 @@
+services:
+  paperless_redis:
+    image: docker.io/library/redis:7
+    container_name: paperless_redis
+    networks:
+      - paperless
+    restart: always
+    volumes:
+      - redisdata:/data
+
+  paperless_postgres:
+    image: docker.io/library/postgres:16
+    container_name: paperless_postgres
+    networks:
+      - paperless
+    restart: always
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+
+  paperless_server:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless_server
+    networks:
+      - paperless
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paperless.rule=Host(`documents.maxid.me`)"
+      - "traefik.http.routers.paperless.tls=true"
+      - "traefik.http.routers.paperless.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.paperless.entrypoints=websecure"
+      - "traefik.docker.network=web"
+    restart: always
+    depends_on:
+      - paperless_redis
+      - paperless_postgres
+    expose:
+      - 8000
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media
+    environment:
+      PAPERLESS_URL: https://documents.maxid.me
+
+      PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
+      PAPERLESS_SOCIALACCOUNT_PROVIDERS: ${AUTHENTIK_CONFIG}
+
+      PAPERLESS_PORT: 8000
+      PAPERLESS_CONSUMER_POLLING: 60
+      PAPERLESS_CONSUMER_RECURSIVE: "true"
+      PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: "true"
+
+      PAPERLESS_OCR_LANGUAGE: deu+eng
+      PAPERLESS_REDIS: redis://paperless_redis:6379
+      PAPERLESS_TASK_WORKERS: 2
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://paperless_gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://paperless_tika:9998
+      PAPERLESS_TIME_ZONE: Europe/Vienna
+      PAPERLESS_ACCOUNT_ALLOW_SIGNUPS: "false"
+      PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS: "true"
+      PAPERLESS_DISABLE_REGULAR_LOGIN: "true"
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBHOST: paperless_postgres
+  paperless_gotenberg:
+    image: gotenberg/gotenberg:8.5.1
+    container_name: paperless_gotenberg
+    networks:
+      - paperless
+    expose:
+      - 3000
+    restart: always
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  paperless_tika:
+    image: ghcr.io/paperless-ngx/tika:2.9.1-minimal
+    container_name: paperless_tika
+    networks:
+      - paperless
+    restart: always
+    expose:
+      - 9998
+
+volumes:
+  data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/paperless/data'
+  media:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/paperless/media'
+  pgdata:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/paperless/pgdata'
+  redisdata:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/paperless/redisdata'
+
+networks:
+  paperless:
+    name: paperless
+    internal: true
+  web:
+    name: web
+    external: true

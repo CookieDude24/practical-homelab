@@ -13,7 +13,7 @@ services:
         limits:
           memory: 1000M #
     volumes:
-      - /home/maxid/mealie/data:/app/data/
+      - data:/app/data/
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mealie.rule=Host(`rezepte.maxid.me`)"
@@ -58,7 +58,7 @@ services:
       - mealie
     restart: always
     volumes:
-      - /home/maxid/mealie/pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: mealie
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -77,6 +77,20 @@ secrets:
     file: postgrespassword.txt
   OIDC_CLIENT_SECRET:
     file: oidc_secret.txt
+
+volumes:
+  data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/mealie/data'
+  pgdata:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/mealie/pgdata'
 
 networks:
   mealie:

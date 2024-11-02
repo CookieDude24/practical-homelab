@@ -12,7 +12,7 @@ services:
       retries: 5
       timeout: 5s
     volumes:
-      - data/database:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: ${PG_PASS:?database password required}
       POSTGRES_USER: ${PG_USER:-authentik}
@@ -34,7 +34,7 @@ services:
       retries: 5
       timeout: 3s
     volumes:
-      - data/redis:/data
+      - redis:/data
   server:
     image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
     container_name: authentik_server
@@ -57,8 +57,8 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
       AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
     volumes:
-      - data/media:/media
-      - data/custom-templates:/templates
+      - media:/media
+      - templates:/templates
     env_file:
       - .env
     ports:
@@ -89,9 +89,9 @@ services:
     user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - data/media:/media
-      - data/certs:/certs
-      - data/custom-templates:/templates
+      - media:/media
+      - certs:/certs
+      - templates:/templates
     env_file:
       - .env
     depends_on:
@@ -103,9 +103,33 @@ networks:
     external: true
 
 volumes:
-  data:
+  pgdata:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: 'data'
+      device: '/home/maxid/authentik/database'
+  redis:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/authentik/redis'
+  media:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/authentik/media'
+  templates:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/authentik/custom-templates'
+  certs:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/maxid/authentik/certs'

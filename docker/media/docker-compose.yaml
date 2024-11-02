@@ -1,0 +1,149 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
+    volumes:
+      - ${HOST_MEDIA_PATH:-./}jellyfin-config:/config
+      - ${HOST_MEDIA_PATH:-./}jellyfin-cache:/cache
+      - tv:/media/tv
+      - movie:/media/movie
+    restart: ${RESTART_MODE}
+    expose:
+      - 8096
+    environment:
+      - JELLYFIN_PublishedServerUrl=https://media.maxid.me
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=(Host(`media.maxid.me`) && PathPrefix(`/jellyfin`))"
+      - "traefik.http.routers.jellyfin.tls=true"
+      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+    networks:
+      - web
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://127.0.0.1:8096/jellyfin/health" ]
+      interval: 30s
+      retries: 10
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - TZ=Etc/UTC
+    volumes:
+      - ${HOST_MEDIA_PATH:-./}radarr-config:/config
+      - media:/media
+    expose:
+      - 7878
+    restart: ${RESTART_MODE}
+    networks:
+      - web
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://127.0.0.1:7878/radarr/ping" ]
+      interval: 30s
+      retries: 10
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - TZ=Etc/UTC
+    volumes:
+      - ${HOST_MEDIA_PATH:-./}sonarr-config:/config
+      - media:/media
+    expose:
+      - 8989
+    restart: ${RESTART_MODE}
+    networks:
+      - web
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://127.0.0.1:8989/sonarr/ping" ]
+      interval: 30s
+      retries: 10
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - TZ=Etc/UTC
+    volumes:
+      - ${HOST_MEDIA_PATH:-./}prowlarr-config:/config
+    ports:
+      - 9696:9696
+    restart: ${RESTART_MODE}
+    networks:
+      - web
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://127.0.0.1:9696/prowlarr/ping" ]
+      interval: 30s
+      retries: 10
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - TZ=Etc/UTC
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - ${HOST_MEDIA_PATH:-./}qbittorrent-config:/config
+      - downloads:/media/downloads
+    expose:
+      - 8080
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+    restart: ${RESTART_MODE}
+    networks:
+      - web
+    healthcheck:
+      # Container may fail if the PIA's token expired, so mark as unhealthy when there is no internet connection
+      # see: https://github.com/qdm12/gluetun/issues/641#issuecomment-933856220
+      test: [ "CMD", "curl", "--fail", "http://127.0.0.1:8080", "https://google.com" ]
+      interval: 30s
+      retries: 10
+
+  unpackerr:
+    image: golift/unpackerr
+    container_name: unpackerr
+    volumes:
+      - downloads:/data/torrents
+    restart: always
+    environment:
+      - UN_SONARR_0_URL=http://sonarr:8989/sonarr
+      - UN_SONARR_0_API_KEY=${SONARR_API_KEY}
+      - UN_RADARR_0_URL=http://radarr:7878/radarr
+      - UN_RADARR_0_API_KEY=${RADARR_API_KEY}
+    networks:
+      - web
+
+volumes:
+  media:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/media'
+  tv:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/media/tv'
+  movie:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/media/movie'
+  downloads:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/media/downloads'
+
+networks:
+  web:
+    name: web
+    external: true
