@@ -1,0 +1,86 @@
+services:
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:v2.1.0
+    container_name: mealie_server
+    networks:
+      - web
+      - mealie
+    restart: always
+    expose:
+      - 9000
+    deploy:
+      resources:
+        limits:
+          memory: 1000M #
+    volumes:
+      - /home/maxid/mealie/data:/app/data/
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mealie.rule=Host(`rezepte.maxid.me`)"
+      - "traefik.http.routers.mealie.tls=true"
+      - "traefik.http.routers.mealie.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.mealie.entrypoints=websecure"
+      - "traefik.docker.network=web"
+    environment:
+      LOG_LEVEL: debug
+      # Set Backend ENV Variables Here
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Vienna
+      MAX_WORKERS: 1
+      WEB_CONCURRENCY: 1
+      BASE_URL: https://rezepte.maxid.me
+      # Database Settings
+      DB_ENGINE: postgres
+      POSTGRES_USER: mealie
+      POSTGRES_SERVER: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: mealie
+      # OIDC Settings
+      OIDC_AUTH_ENABLED: true
+      OIDC_CONFIGURATION_URL: https://auth.maxid.me/application/o/mealie/.well-known/openid-configuration
+      OIDC_CLIENT_ID: osjZnQnfxYJkKdv7uXiGXYK9ZZse0Gbbpl2JkCBo
+      OIDC_ADMIN_GROUP: app-admin
+      OIDC_AUTO_REDIRECT: true
+      OIDC_PROVIDER_NAME: Authentik
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    secrets:
+      - OIDC_CLIENT_SECRET
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    container_name: mealie_postgres
+    image: postgres:15
+    networks:
+      - mealie
+    restart: always
+    volumes:
+      - /home/maxid/mealie/pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: mealie
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGUSER: mealie
+    env_file:
+      - .env
+
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+secrets:
+  POSTGRES_PASSWORD:
+    file: postgrespassword.txt
+  OIDC_CLIENT_SECRET:
+    file: oidc_secret.txt
+
+networks:
+  mealie:
+    name: mealie
+  web:
+    name: web
+    external: true
